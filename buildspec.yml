@@ -1,0 +1,18 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+    commands:
+      - pip install -r requirements-dev.txt
+  build:
+    commands:
+      - pytest -v
+
+artifacts:
+  files:
+    - application.py
+    - config.py
+    - requirements.txt
+    - app/**/*
