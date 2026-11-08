@@ -25,7 +25,7 @@ GITHUB_REPO=https://github.com/juandguzCasadiego/proyecto-devops-floropitos
 ARTIFACT_BUCKET=floropitos-ci-artifacts-${ACCOUNT_ID}
 STATE=$HOME/blacklist-infra.env
 touch "$STATE"; source "$STATE"
-save() { grep -v "^$1=" "$STATE" > "$STATE.tmp" || true; mv "$STATE.tmp" "$STATE"; echo "$1=$2" >> "$STATE"; export "$1=$2"; }
+save() { grep -v "^$1=" "$STATE" > "$STATE.tmp" || true; mv "$STATE.tmp" "$STATE"; echo "$1=${2:-}" >> "$STATE"; export "$1=${2:-}"; }
 log() { echo -e "\n\033[1;34m==> $*\033[0m"; }
 
 VPC_ID=$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true --query 'Vpcs[0].VpcId' --output text)
@@ -158,6 +158,7 @@ step_image() {
 
 step_ecs() {
   log "Cluster, definicion de tarea y servicio ECS Fargate"
+  aws iam create-service-linked-role --aws-service-name ecs.amazonaws.com >/dev/null 2>&1 || true
   aws ecs create-cluster --cluster-name $CLUSTER --capacity-providers FARGATE --settings name=containerInsights,value=disabled >/dev/null
   sed "s#<IMAGE1_NAME>#$INITIAL_IMAGE#" ~/src/taskdef.json > /tmp/taskdef.json
   save TASKDEF_ARN $(aws ecs register-task-definition --cli-input-json file:///tmp/taskdef.json --query 'taskDefinition.taskDefinitionArn' --output text)
@@ -169,7 +170,8 @@ step_ecs() {
       --load-balancers targetGroupArn=$TG_BLUE,containerName=$CONTAINER,containerPort=$PORT >/dev/null
   fi
   echo "Esperando a que el servicio quede estable..."
-  aws ecs wait services-stable --cluster $CLUSTER --services $SERVICE
+  # (el waiter services-stable no funciona con el controlador CODE_DEPLOY)
+  until [ "$(aws ecs describe-services --cluster $CLUSTER --services $SERVICE --query 'services[0].runningCount' --output text)" -ge 1 ]; do sleep 15; done
 }
 
 step_codedeploy() {
