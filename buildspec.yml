@@ -1,18 +1,41 @@
 version: 0.2
 
+# CI + construccion de la imagen (Entrega 3).
+# 1) Instala dependencias y corre las pruebas unitarias (si fallan, el pipeline se detiene).
+# 2) Construye la imagen Docker y la publica en Amazon ECR.
+# 3) Entrega a CodeDeploy los archivos imageDetail.json, taskdef.json y appspec.yaml.
+# Variables definidas en el proyecto de CodeBuild: AWS_ACCOUNT_ID, IMAGE_REPO_NAME.
+
 phases:
   install:
     runtime-versions:
       python: 3.12
     commands:
       - pip install -r requirements-dev.txt
-  build:
+  pre_build:
+    on-failure: ABORT
     commands:
+      - echo "Ejecutando pruebas unitarias..."
       - pytest -v
+      - echo "Autenticando en Amazon ECR..."
+      - REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+      - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+  build:
+    on-failure: ABORT
+    commands:
+      - echo "Construyendo la imagen $REPOSITORY_URI:$IMAGE_TAG"
+      - docker build -t $REPOSITORY_URI:latest -t $REPOSITORY_URI:$IMAGE_TAG .
+  post_build:
+    commands:
+      - echo "Publicando la imagen en ECR..."
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - docker push $REPOSITORY_URI:latest
+      - printf '{"ImageURI":"%s"}' $REPOSITORY_URI:$IMAGE_TAG > imageDetail.json
+      - cat imageDetail.json
 
 artifacts:
   files:
-    - application.py
-    - config.py
-    - requirements.txt
-    - app/**/*
+    - imageDetail.json
+    - taskdef.json
+    - appspec.yaml

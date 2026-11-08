@@ -82,3 +82,19 @@ Subir el contenido de la carpeta como zip a Beanstalk, con `application.py` en l
 
 
 token de momento: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc5MTkxMjA2MSwianRpIjoiNjQyNjZiMTgtNDE5OS00YTVjLWIxZGEtZmU0ODU5NWE1YTZkIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6ImJsYWNrbGlzdC1jbGllbnQiLCJuYmYiOjE3OTE5MTIwNjEsImNzcmYiOiI1OWFmNDkzNS00NDE1LTRlYjQtYmRlYy0xMjZmMjNlOGYxMTcifQ.G-dlhkUg2SvnF5XUCLl9z8N1eTODw7Mi8xnjbhWV87A
+## Entrega 3 – Entrega continua en AWS Fargate
+
+Arquitectura: GitHub (`main`) → CodePipeline → CodeBuild (`pytest` + `docker build` + push a ECR) → CodeDeploy (blue/green) → ECS Fargate detrás de un Application Load Balancer, con RDS PostgreSQL como base de datos.
+
+| Archivo | Uso |
+|---|---|
+| `Dockerfile` | Imagen del microservicio (gunicorn en el puerto 5000) |
+| `buildspec.yml` | Corre las pruebas, construye y publica la imagen en ECR y genera `imageDetail.json` |
+| `taskdef.json` | Plantilla de la definición de tarea de Fargate (`<IMAGE1_NAME>` la reemplaza CodePipeline) |
+| `appspec.yaml` | Especificación de CodeDeploy para ECS (contenedor `blacklist-app`, puerto 5000) |
+| `infra/setup.sh` | Crea la infraestructura desde AWS CloudShell y hace el despliegue manual inicial |
+| `infra/pipeline.sh` | Crea el pipeline `blacklist-pipeline` |
+| `infra/token.py` | Genera el token Bearer con el secreto guardado en SSM |
+| `infra/teardown.sh` | Elimina los recursos al terminar |
+
+Los secretos (`DATABASE_URL` y `JWT_SECRET_KEY`) viven en AWS Systems Manager Parameter Store y la tarea los recibe como variables de entorno; no están en el repositorio.
